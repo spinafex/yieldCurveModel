@@ -1,0 +1,329 @@
+# --- 0. Setup with Class Distribution Check ---
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.decomposition import PCA
+from sklearn.metrics import accuracy_score, r2_score
+import warnings
+
+# --- 1. Load data ---
+data = pd.read_csv('data.csv', parse_dates=['Date'])  # <-- make sure 'Date' is your datetime column
+data = data.sort_values('Date').reset_index(drop=True)
+
+# Define curve columns
+curve_columns = [
+    'ust1m', 'ust3m', 'ust6m', 'ust1y', 'ust2y', 'ust5y', 'ust7y', 'ust10y', 'ust20y', 'ust30y',
+    'ss2', 'ss3', 'ss5', 'ss7', 'ss10', 'ss20', 'ss30',
+    's1', 's2', 's3', 's5', 's7', 's10', 's20', 's30',
+    'inf1y','inf2y','inf3y','inf5y','inf7y','inf10y','inf20y','inf30y',
+    'be5','be10','be20','be30',
+    'ry5', 'ry10', 'ry30'
+]
+
+# --- 2. Feature Engineering ---
+
+# 2.1 Create target: 2s10s slope (ust10y - ust2y)
+data['Current_Slope'] = data['ust10y'] - data['ust2y']
+
+# 2.2 Predict Slope Change 5 days ahead
+future_shift = 5
+data['Future_Slope'] = data['Current_Slope'].shift(-future_shift)
+data['Slope_Change'] = data['Future_Slope'] - data['Current_Slope']
+
+# 2.3 Define dynamic thresholds for class assignment
+lower = data['Slope_Change'].quantile(0.33)
+upper = data['Slope_Change'].quantile(0.66)
+
+data['Slope_Class'] = data['Slope_Change'].apply(
+    lambda x: 'Steepen' if x > upper else ('Flatten' if x < lower else 'Unchanged')
+)
+
+# 🔍 Class distribution check
+class_counts = data['Slope_Class'].value_counts(normalize=True)
+print("\n📊 Class distribution:")
+print(class_counts)
+
+# 🔴 Warning if any class is under 10%
+if (class_counts < 0.10).any():
+    warnings.warn(f"⚠️ Class imbalance detected. One or more classes < 10% of samples.\n{class_counts.to_dict()}")
+
+# 2.4 Lag all input features to avoid lookahead bias
+for col in curve_columns:
+    data[f'{col}_lagged'] = data[col].shift(future_shift)
+
+# 2.5 Drop rows with NaNs caused by shifting
+data = data.dropna().reset_index(drop=True)
+
+# Step 1: Preprocessing & Normalization
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+
+# Load data
+file_path = '/content/data.csv'  # Replace with your actual file path
+data = pd.read_csv(file_path, parse_dates=['Date'])
+
+# Set 'date' as index if needed
+if 'Date' in data.columns:
+    data.set_index('Date', inplace=True)
+
+# Handle missing values
+data = data.fillna(method='ffill').dropna()
+
+# Select numeric columns
+numeric_cols = data.select_dtypes(include=[np.number]).columns.tolist()
+
+# Standardize numeric data
+scaler = StandardScaler()
+data_scaled = pd.DataFrame(scaler.fit_transform(data[numeric_cols]),
+                           columns=numeric_cols,
+                           index=data.index)
+
+# Save to new file for next step
+data_scaled.to_csv('/content/data_step1_scaled.csv')
+
+print("✅ Step 1 completed. Data shape:", data_scaled.shape)
+data_scaled.head()
+
+# Step 2: Feature Engineering
+import pandas as pd
+import numpy as np
+
+# Load the standardized data
+data = pd.read_csv('/content/data_step1_scaled.csv', index_col='Date', parse_dates=True)
+
+# Make a copy for adding new features
+features = data.copy()
+
+# ---- Example Feature Engineering ----
+# 1. Common Spreads (assumes columns exist)
+try:
+    features['2s10s'] = data['ust10y'] - data['ust2y']
+    features['5s30s'] = data['ust30y'] - data['ust5y']
+    features['2s5s'] = data['ust5y'] - data['ust2y']
+except KeyError:
+    print("Some curve columns for spreads are missing.")
+
+# 2. Curvature (Butterfly: (10y-2y) - (2y-1m))
+try:
+    features['butterfly_10s2s1m'] = (data['ust10y'] - data['ust2y']) - (data['ust2y'] - data['ust1m'])
+except KeyError:
+    print("Some curve columns for curvature are missing.")
+
+# 3. Momentum (20-day diff of 10y yield and 2s10s spread)
+features['mom_10y'] = data['ust10y'].diff(20)
+features['mom_2s10s'] = features['2s10s'].diff(20)
+
+# 4. Rolling Volatility (20-day std dev)
+features['vol_10y'] = data['ust10y'].rolling(window=20).std()
+features['vol_2s10s'] = features['2s10s'].rolling(window=20).std()
+
+# Drop rows with NaNs from diff and rolling
+features.dropna(inplace=True)
+
+# Save for next step
+features.to_csv('/content/data_step2_features.csv')
+
+print("✅ Step 2 completed. Feature matrix shape:", features.shape)
+features.head()
+
+# Step 3: PCA - Dimensionality Reduction
+import pandas as pd
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+# Load feature data
+data = pd.read_csv('/content/data_step2_features.csv', parse_dates=['Date'])
+data.set_index('Date', inplace=True)
+
+# Optional: re-standardize (recommended before PCA)
+scaler = StandardScaler()
+data_scaled = pd.DataFrame(scaler.fit_transform(data),
+                           columns=data.columns,
+                           index=data.index)
+
+# Apply PCA
+n_components = 3
+pca = PCA(n_components=n_components)
+principal_components = pca.fit_transform(data_scaled)
+
+# Create DataFrame with PCs
+pca_df = pd.DataFrame(principal_components,
+                      columns=[f'PC{i+1}' for i in range(n_components)],
+                      index=data.index)
+
+# Merge PCs back into original feature data
+data_with_pca = data.copy()
+data_with_pca[[f'PC{i+1}' for i in range(n_components)]] = pca_df
+
+# Save for next step
+data_with_pca.to_csv('/content/data_step3_pca.csv')
+
+# Print explained variance
+print("✅ Step 3 completed.")
+print("🔍 Explained variance ratio:", pca.explained_variance_ratio_)
+data_with_pca.head()
+
+# Modified Step 4 for 1-Month Horizon (Alongside 6m/12m/18m If You Like)
+
+import pandas as pd
+import numpy as np
+
+# Load PCA-enhanced features
+data = pd.read_csv('/content/data_step3_pca.csv', parse_dates=['Date'])
+data.set_index('Date', inplace=True)
+
+# Target: Current 2s10s Slope
+data['slope_now'] = data['ust10y'] - data['ust2y']
+
+# Add 1-month to forecast horizons
+forecast_horizons = {
+    '1m': 21,        # ≈ 1 month
+    '6m': 21 * 6,
+    '12m': 21 * 12,
+    '18m': 21 * 18
+}
+
+for label, shift in forecast_horizons.items():
+    future_slope_col = f'slope_{label}_ahead'
+    delta_col = f'delta_{label}'
+
+    data[future_slope_col] = data['slope_now'].shift(-shift)
+    data[delta_col] = data[future_slope_col] - data['slope_now']
+
+    # Use dynamic thresholds for classification: 33rd and 66th percentiles
+    lower = data[delta_col].quantile(0.33)
+    upper = data[delta_col].quantile(0.66)
+
+    data[f'class_{label}'] = np.select(
+        [data[delta_col] > upper, data[delta_col] < lower],
+        [1, -1],
+        default=0
+    )
+
+# Drop rows with NaNs from lookahead shifts
+data.dropna(inplace=True)
+
+# Save dataset
+data.to_csv('/content/data_step4_targets.csv')
+
+print("✅ Step 4 completed with 1m, 6m, 12m, 18m targets.")
+print("📊 Sample target columns:")
+display(data[[col for col in data.columns if 'class' in col or 'delta' in col]].head())
+
+# Step 5: Train/Test Split & Model Input Prep
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+# Load the dataset
+data = pd.read_csv('/content/data_step4_targets.csv', parse_dates=['Date'])
+data.set_index('Date', inplace=True)
+
+# Select target horizon (you can loop this later)
+target_horizon = '1m'
+y_cls = data[f'class_{target_horizon}']       # classification
+y_reg = data[f'delta_{target_horizon}']       # regression (in bps)
+
+# Select features
+# Use PCA components + spreads + momentum + volatility as a base
+feature_cols = [
+    'PC1', 'PC2', 'PC3',
+    '2s10s', '5s30s', '2s5s',
+    'butterfly_10s2s1m',
+    'mom_10y', 'mom_2s10s',
+    'vol_10y', 'vol_2s10s'
+]
+
+# Ensure all required columns are present
+for col in feature_cols:
+    if col not in data.columns:
+        raise ValueError(f"Missing expected feature column: {col}")
+
+X = data[feature_cols]
+
+# Final train/test split
+X_train, X_test, y_cls_train, y_cls_test, y_reg_train, y_reg_test = train_test_split(
+    X, y_cls, y_reg, test_size=0.2, shuffle=False
+)
+
+# Save for modeling
+X_train.to_csv('/content/X_train.csv')
+X_test.to_csv('/content/X_test.csv')
+y_cls_train.to_csv('/content/y_cls_train.csv')
+y_cls_test.to_csv('/content/y_cls_test.csv')
+y_reg_train.to_csv('/content/y_reg_train.csv')
+y_reg_test.to_csv('/content/y_reg_test.csv')
+
+print("✅ Step 5 completed.")
+print(f"Training samples: {len(X_train)}, Test samples: {len(X_test)}")
+
+# Step 6: Model Training (Classifier & Regressor)
+import pandas as pd
+import xgboost as xgb
+from sklearn.metrics import accuracy_score, classification_report, mean_squared_error, r2_score
+import joblib
+import numpy as np
+
+# Load data
+X_train = pd.read_csv('/content/X_train.csv', index_col=0)
+X_test = pd.read_csv('/content/X_test.csv', index_col=0)
+y_cls_train = pd.read_csv('/content/y_cls_train.csv', index_col=0).squeeze()  # Ensure it's a 1D series
+y_cls_test = pd.read_csv('/content/y_cls_test.csv', index_col=0).squeeze()  # Ensure it's a 1D series
+y_reg_train = pd.read_csv('/content/y_reg_train.csv', index_col=0).squeeze()  # Ensure it's a 1D series
+y_reg_test = pd.read_csv('/content/y_reg_test.csv', index_col=0).squeeze()  # Ensure it's a 1D series
+
+# Ensure target variables are of correct shape for classification and regression
+print(f"y_cls_train shape: {y_cls_train.shape}, y_cls_test shape: {y_cls_test.shape}")
+print(f"y_reg_train shape: {y_reg_train.shape}, y_reg_test shape: {y_reg_test.shape}")
+
+# 1. Remap class labels from [-1, 0, 1] to [0, 1, 2]
+y_cls_train_remap = y_cls_train.replace({-1: 0, 0: 1, 1: 2})
+y_cls_test_remap = y_cls_test.replace({-1: 0, 0: 1, 1: 2})
+
+# 2. Classifier
+clf_model = xgb.XGBClassifier(objective='multi:softprob', num_class=3, eval_metric='mlogloss')
+clf_model.fit(X_train, y_cls_train_remap)
+
+y_cls_pred = clf_model.predict(X_test)
+
+print("📊 Classification Report:")
+class_labels = ['Flatten', 'Unchanged', 'Steepen']
+print(classification_report(y_cls_test_remap, y_cls_pred, target_names=['Flatten (-1)', 'Unchanged (0)', 'Steepen (1)'], zero_division=0))
+print(f"✅ Accuracy: {accuracy_score(y_cls_test_remap, y_cls_pred):.4f}")
+
+# 3. Regressor
+reg_model = xgb.XGBRegressor(objective='reg:squarederror', eval_metric='rmse')
+reg_model.fit(X_train, y_reg_train)
+
+y_reg_pred = reg_model.predict(X_test)
+
+print("\n📈 Regression Results:")
+print(f"✅ R² Score: {r2_score(y_reg_test, y_reg_pred):.4f}")
+# Fix the RMSE line: use 'squared=False' instead of 'squared'
+mse = mean_squared_error(y_reg_test, y_reg_pred)
+rmse = mse ** 0.5
+print(f"📉 RMSE: {rmse:.4f}")
+
+
+# Check class distribution in y_cls_train and y_cls_test
+print("Class distribution in y_cls_train:")
+print(y_cls_train.value_counts())
+print("Class distribution in y_cls_test:")
+print(y_cls_test.value_counts())
+
+# Check predictions to see the class distribution of y_cls_pred
+print("Class distribution in y_cls_pred:")
+print(pd.Series(y_cls_pred).value_counts())
+
+# Proceed with classification report if the distribution is okay
+print("y_cls_test values:", y_cls_test.unique())
+print("y_cls_pred values:", np.unique(y_cls_pred))
+print("y_cls_test type:", type(y_cls_test.iloc[0]))
+
+# Optional: Save models
+#joblib.dump(clf_model, '/content/cls_model_xgb.pkl')
+#joblib.dump(reg_model, '/content/reg_model_xgb.pkl')
+
+
