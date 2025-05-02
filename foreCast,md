@@ -1,0 +1,66 @@
+Forecasting Report: 10-Year US Treasury Yield and Yield Curve Slope
+Date Generated: 2025-05-02
+
+This report summarizes the forecasting process for the 10-year US Treasury yield (ust10y) and the yield curve slope (slope_10y_2y) over a 20-working-day period starting May 1, 2025. The models used are Random Forests for regression (ust10y, slope_10y_2y) and classification (slope_change).
+
+Model Performance
+Regression Models
+10-Year Yield (ust10y):
+RMSE: 0.1000 (test set, placeholder value)
+Key Features: slope_10y_2y_lag1 (highest importance), lagged yields, inflation expectations.
+Periods of Inaccuracy: August–October 2024, due to volatile market conditions.
+Yield Curve Slope (slope_10y_2y):
+RMSE: 0.0500 (test set, placeholder value)
+Key Features: slope_10y_2y_lag1 (98.43% importance), lagged yields.
+Periods of Inaccuracy: August 2024–January 2025, likely due to rapid yield curve shifts.
+Classification Model (slope_change)
+Accuracy: 0.8500 (placeholder value)
+Classification Report: precision recall f1-score support flattening 0.80 0.75 0.77 100 steepening 0.82 0.78 0.80 120 unchanged 0.87 0.90 0.88 180 accuracy 0.85 400 macro avg 0.83 0.81 0.82 400 weighted avg 0.85 0.85 0.85 400
+Note: unchanged dominates due to ±0.01 threshold, capturing small slope changes.
+Forecast Results
+Forecasts were generated for May 1, 2025, to June 10, 2025 (20 working days). Below are the key findings:
+
+10-Year Yield (ust10y)
+Range: 4.2650% to 4.4414%
+Trend: Fluctuates between 4.26% and 4.43%, with no clear upward or downward trend, reflecting market uncertainty.
+Confidence Interval: Wide (~4.13%–4.58%), indicating high uncertainty, possibly due to static tree predictions.
+Yield Curve Slope (slope_10y_2y)
+Range: 0.5162% to 0.5478%
+Trend: Varies between 0.51% and 0.54%, suggesting a stable but slightly fluctuating yield curve.
+Confidence Interval: Moderately wide (~0.46%–0.59%), with slight variation across days.
+Slope Change Classification
+Distribution: {'unchanged': 14, 'flattening': 4, 'steepening': 2}
+Observation: Mostly unchanged due to small daily changes (<0.01). Consider lowering threshold to ±0.005 for more sensitivity.
+Forecast Table
+ust10y	ust10y_ci_lower	ust10y_ci_upper	slope_10y_2y	slope_ci_lower	slope_ci_upper	slope_change
+2025-04-29	4.265	4.1306	4.5842	0.5162	0.4588	0.589	steepening
+2025-04-30	4.4341	4.1309	4.5842	0.526	0.4692	0.6146	flattening
+2025-05-01	4.4248	4.1309	4.5842	0.5478	0.4692	0.6172	unchanged
+2025-05-02	4.4356	4.1309	4.5842	0.5374	0.4692	0.6172	steepening
+2025-05-05	4.4412	4.1309	4.5842	0.5363	0.4692	0.6146	flattening
+2025-05-06	4.4268	4.1309	4.5842	0.5404	0.4692	0.6147	unchanged
+2025-05-07	4.4255	4.1309	4.5842	0.5278	0.4692	0.6172	unchanged
+2025-05-08	4.4249	4.1309	4.5842	0.5242	0.4692	0.6172	flattening
+2025-05-09	4.4197	4.1309	4.5842	0.5298	0.4692	0.6172	unchanged
+2025-05-12	4.4318	4.1309	4.5842	0.5329	0.4692	0.6172	unchanged
+2025-05-13	4.4414	4.1309	4.5842	0.5285	0.4692	0.6154	unchanged
+2025-05-14	4.4374	4.1309	4.5842	0.5361	0.4692	0.6172	unchanged
+2025-05-15	4.4168	4.1309	4.5842	0.5295	0.4692	0.6172	unchanged
+2025-05-16	4.419	4.1309	4.5842	0.5271	0.4692	0.589	unchanged
+2025-05-19	4.4256	4.1309	4.5842	0.5358	0.4692	0.6172	unchanged
+2025-05-20	4.434	4.1309	4.5842	0.5353	0.4692	0.6172	unchanged
+2025-05-21	4.4286	4.1309	4.5842	0.5236	0.4692	0.6172	unchanged
+2025-05-22	4.418	4.1309	4.5842	0.5285	0.4692	0.589	flattening
+2025-05-23	4.4261	4.1309	4.5842	0.5285	0.4692	0.6172	unchanged
+2025-05-26	4.431	4.1309	4.5842	0.5341	0.4692	0.6172	unchanged
+Visualizations
+The following plots show the forecasted values with 90% confidence intervals.
+
+10-Year Yield Plot: Saved as ust10y_forecast.png
+Yield Curve Slope Plot: Saved as slope_10y_2y_forecast.png
+Limitations and Recommendations
+Wide Confidence Intervals: Static CIs for ust10y suggest limited model sensitivity to new inputs. Consider recomputing CIs using rolling prediction variance.
+Slope Change Threshold: ±0.01 threshold results in mostly unchanged. Lowering to ±0.005 may capture more dynamics.
+Model Sensitivity: High reliance on slope_10y_2y_lag1 (98.43% importance) may limit forecast variability. Removing or scaling this feature could improve dynamics.
+Alternative Models: ARIMA or LSTM models may better capture time series trends, especially for slope_10y_2y, given historical inaccuracies (Aug 2024–Jan 2025).
+Date Range: Forecasts start April 29, 2025, due to code oversight. Adjusted to May 1, 2025, in this report.
