@@ -102,11 +102,11 @@ Lower the slope_change threshold (e.g., ±0.005) or use probabilistic outputs to
 
 These approaches could address limitations like wide confidence intervals, model sensitivity to specific features, and inaccuracies during volatile periods, offering more robust and precise forecasts.
 Notes
-Disregarding Minor Issues: As requested, the README.md ignores coding errors (e.g., missing metrics, NameError in Step 9) and minor issues (e.g., forecasts starting April 29 instead of May 1). The date range is reported as April 29–May 26, 2025, per your Step 8 output.
 
-Metrics: The report omits specific RMSE and accuracy values due to missing Step 7 metrics, focusing on residuals summaries and general performance insights.
 
-Tone: The text is professional and suitable for a README.md, assuming a technical audience familiar with financial modeling and machine learning.
+
+
+
 
 
 
